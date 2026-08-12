@@ -33,7 +33,10 @@ type MemoryFS struct {
 }
 
 func (m *MemoryFS) Open(name string) (fs.File, error) {
-	file, err := m.base.Open(name)
+	// Склеиваем путь для оригинального embed, так как там файлы лежат в папке migrations/
+	originalPath := fmt.Sprintf("migrations/%s", name)
+	
+	file, err := m.base.Open(originalPath)
 	if err != nil {
 		return nil, err
 	}
@@ -44,18 +47,20 @@ func (m *MemoryFS) Open(name string) (fs.File, error) {
 		return nil, err
 	}
 
-	// Читаем сырой SQL файл из embed
+	// Если система пытается открыть директорию, возвращаем оригинальный объект
+	if stat.IsDir() {
+		return file, nil
+	}
+
 	buf := make([]byte, stat.Size())
 	if _, err := file.Read(buf); err != nil {
 		return nil, err
 	}
 
-	// Производим динамическую автоподмену плейсхолдеров
 	sqlStr := string(buf)
 	sqlStr = strings.ReplaceAll(sqlStr, "{{TABLE_NAME}}", m.targetTable)
 	sqlStr = strings.ReplaceAll(sqlStr, "{{TABLE_SUFFIX}}", m.tableSuffix)
 
-	// Перепаковываем измененный текст через стандартный fstest.MapFS
 	mockFS := fstest.MapFS{
 		name: &fstest.MapFile{
 			Data: []byte(sqlStr),
