@@ -1,42 +1,62 @@
 package logger
 
 import (
-	"io/fs"
+	"bytes"
 	"embed"
 	"fmt"
+	"io"
+	"io/fs"
 	"strings"
-	"testing/fstest"
+	"time"
 
-	// 1. Корневой пакет миграций
 	"github.com/golang-migrate/migrate/v4"
-
-	// 2. Драйвер iofs от golang-migrate (с подчеркиванием и без)
-	_ "github.com/golang-migrate/migrate/v4/source/iofs"
+	// Регистрируем и импортируем стандартный iofs драйвер
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	_ "github.com/golang-migrate/migrate/v4/source/iofs"
 
-	// 3. Драйвер pgx/v5 для миграций с алиасом
+	// Драйвер pgx/v5 с алиасом для устранения конфликта имен
 	migrate_pgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 
-	// 4. Драйверы pgxpool и stdlib совместимости
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
 //go:embed migrations/*.sql
-var migrationFiles embed.FS
+var rawMigrationFiles embed.FS
 
-// MemoryFS подменяет текст файлов «на лету» для iofs драйвера
-type MemoryFS struct {
-	base        fs.FS
+// CustomFileInfo реализует интерфейс fs.FileInfo для наших модифицированных файлов
+type CustomFileInfo struct {
+	name string
+	size int64
+	mode fs.FileMode
+}
+
+func (c *CustomFileInfo) Name() string       { return c.name }
+func (c *CustomFileInfo) Size() int64        { return c.size }
+func (c *CustomFileInfo) Mode() fs.FileMode  { return c.mode }
+func (c *CustomFileInfo) ModTime() time.Time { return time.Now() }
+func (c *CustomFileInfo) IsDir() bool        { return false }
+func (c *CustomFileInfo) Sys() any          { return nil }
+
+// MemoryFile реализует интерфейс fs.File для чтения SQL из памяти
+type MemoryFile struct {
+	reader *bytes.Reader
+	info   fs.FileInfo
+}
+
+func (m *MemoryFile) Stat() (fs.FileInfo, error) { return m.info, nil }
+func (m *MemoryFile) Read(b []byte) (int, error) { return m.reader.Read(b) }
+func (m *MemoryFile) Close() error               { return nil }
+
+// CustomFileSystem перехватывает чтение файлов и подменяет плейсхолдеры
+type CustomFileSystem struct {
+	baseFS      fs.FS
 	targetTable string
 	tableSuffix string
 }
 
-func (m *MemoryFS) Open(name string) (fs.File, error) {
-	// Склеиваем путь для оригинального embed, так как там файлы лежат в папке migrations/
-	originalPath := fmt.Sprintf("migrations/%s", name)
-	
-	file, err := m.base.Open(originalPath)
+func (c *CustomFileSystem) Open(name string) (fs.File, error) {
+	file, err := c.baseFS.Open(name)
 	if err != nil {
 		return nil, err
 	}
@@ -47,64 +67,66 @@ func (m *MemoryFS) Open(name string) (fs.File, error) {
 		return nil, err
 	}
 
-	// Если система пытается открыть директорию, возвращаем оригинальный объект
 	if stat.IsDir() {
 		return file, nil
 	}
 
-	buf := make([]byte, stat.Size())
-	if _, err := file.Read(buf); err != nil {
+	buf, err := io.ReadAll(file)
+	if err != nil {
 		return nil, err
 	}
 
+	// Динамически заменяем плейсхолдеры схемы и таблицы
 	sqlStr := string(buf)
-	sqlStr = strings.ReplaceAll(sqlStr, "{{TABLE_NAME}}", m.targetTable)
-	sqlStr = strings.ReplaceAll(sqlStr, "{{TABLE_SUFFIX}}", m.tableSuffix)
+	sqlStr = strings.ReplaceAll(sqlStr, "{{TABLE_NAME}}", c.targetTable)
+	sqlStr = strings.ReplaceAll(sqlStr, "{{TABLE_SUFFIX}}", c.tableSuffix)
 
-	mockFS := fstest.MapFS{
-		name: &fstest.MapFile{
-			Data: []byte(sqlStr),
-			Mode: stat.Mode(),
+	// Возвращаем кастомный файл из памяти
+	return &MemoryFile{
+		reader: bytes.NewReader([]byte(sqlStr)),
+		info: &CustomFileInfo{
+			name: stat.Name(),
+			size: int64(len(sqlStr)),
+			mode: stat.Mode(),
 		},
-	}
-
-	return mockFS.Open(name)
+	}, nil
 }
 
-// RunMigrations запускает миграции с динамической схемой
+// RunMigrations выполняет миграции
 func RunMigrations(pool *pgxpool.Pool, targetTable string) error {
+	// Изолируем папку migrations, чтобы убрать префиксы путей
+	subFS, err := fs.Sub(rawMigrationFiles, "migrations")
+	if err != nil {
+		return fmt.Errorf("failed to get sub migrations dir: %w", err)
+	}
+
 	tableSuffix := strings.ReplaceAll(targetTable, ".", "_")
 
-	// 1. Создаем обертку для подмены строк в embed.FS
-	memFS := &MemoryFS{
-		base:        migrationFiles,
+	customFS := &CustomFileSystem{
+		baseFS:      subFS,
 		targetTable: targetTable,
 		tableSuffix: tableSuffix,
 	}
 
-	// 2. Инициализируем iofs драйвер от golang-migrate
-	sourceDriver, err := iofs.New(memFS, "migrations")
+	// Передаем точку ".", так как файлы уже находятся в корне благодаря fs.Sub
+	sourceDriver, err := iofs.New(customFS, ".")
 	if err != nil {
 		return fmt.Errorf("failed to create iofs driver: %w", err)
 	}
 
-	// 3. Конвертируем пул в стандартный sql.DB
 	sqlDB := stdlib.OpenDB(*pool.Config().ConnConfig)
 	defer sqlDB.Close()
 
-	// 4. Настраиваем pgx/v5 драйвер миграций через его алиас
 	dbDriver, err := migrate_pgx.WithInstance(sqlDB, &migrate_pgx.Config{})
 	if err != nil {
 		return fmt.Errorf("failed to create db driver: %w", err)
 	}
 
-	// 5. Инициализируем мигратор. Драйвер базы данных для pgx/v5 называется "pgx5"
 	m, err := migrate.NewWithInstance("iofs", sourceDriver, "pgx5", dbDriver)
 	if err != nil {
 		return fmt.Errorf("failed to initialize migrator: %w", err)
 	}
 
-	// 6. Накатываем миграции
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
