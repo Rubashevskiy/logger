@@ -15,6 +15,7 @@ type LogMsg struct {
 } 
 ```
 
+В БД:
 ```sql  
 	data_hash uuid NOT NULL, -- Хеш(При безусловной вставке - случайный),
 		-- при вставке с перезаписью хеш от module, level, code, msg  
