@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS {{TABLE_NAME}} (
 	upd_dttm timestamptz DEFAULT now() NOT NULL,
 	read_flg bool DEFAULT false NOT NULL,
 	event_id uuid DEFAULT gen_random_uuid() NOT NULL,
-	CONSTRAINT trade_sys_pkey PRIMARY KEY (data_hash)
+	CONSTRAINT {{TABLE_SUFFIX}}_pkey PRIMARY KEY (data_hash)
 );
 
 CREATE INDEX IF NOT EXISTS idx_level_time_{{TABLE_SUFFIX}} ON {{TABLE_NAME}} USING btree (level, upd_dttm DESC);

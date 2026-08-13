@@ -64,7 +64,7 @@ func (l *Logger) PushLog(ctx context.Context, data *LogMsg, upsert bool) *LogMsg
 			VALUES ($1, 1, $2, $3, $4, $5, $6, Now(), false, gen_random_uuid());`
 	}
 
-	_, err := l.pool.Exec(ctx, query, data.Hash(), data.Module, data.Level, data.Code, data.Msg, data.Debug)
+	_, err := l.pool.Exec(ctx, query, data.Hash(upsert), data.Module, data.Level, data.Code, data.Msg, data.Debug)
 	if err != nil {
 		log.Printf("error save log to db: %v\n", err)
 		data.Print(true)

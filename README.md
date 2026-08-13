@@ -8,12 +8,24 @@
 
 Пример SQL-команд:
 ```sql
--- 1. Создание схемы (Например test)
-CREATE SCHEMA IF NOT EXISTS test;
+--  Разрешаем пользователю заходить в схему public
+GRANT USAGE ON SCHEMA public TO app_user;
 
--- 2. Выдача прав вашей учетной записи (например, app_user)
-GRANT USAGE ON SCHEMA test TO app_user;
-GRANT CREATE ON SCHEMA test TO app_user; -- Необходимо для работы golang-migrate (создание таблиц)
+--  Разрешаем создавать в ней новые объекты (чтобы создалась таблица schema_migrations)
+GRANT CREATE ON SCHEMA public TO app_user;
+--  Разрешаем пользователю заходить в схему public
+GRANT USAGE ON SCHEMA test_log TO app_user;
+
+-- Даем право создавать в ней таблицы (включая динамические)
+GRANT CREATE ON SCHEMA test_log TO app_user;
+
+-- На случай, если таблица app_logs или связанные с ней индексы/последовательности уже существуют:
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA test_log TO app_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA test_log TO app_user;
+
+-- Права на все таблицы, которые будут созданы в test_log в будущем этим или другими миграциями
+ALTER DEFAULT PRIVILEGES IN SCHEMA test_log GRANT ALL PRIVILEGES ON TABLES TO app_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA test_log GRANT ALL PRIVILEGES ON SEQUENCES TO app_user;
 ```
 
 ## 🚀 Установка

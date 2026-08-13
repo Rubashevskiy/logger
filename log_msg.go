@@ -28,10 +28,13 @@ func NewLogMsg(module, level, msg string, code int64, debug string) *LogMsg {
 	}
 }
 
-func (l *LogMsg) Hash() uuid.UUID {
-	input := fmt.Sprintf("%s|%s|%d|%s", l.Module, l.Level, l.Code, l.Msg)
-	hash := md5.Sum([]byte(input))
-	return uuid.UUID(hash)
+func (l *LogMsg) Hash(upsert bool) uuid.UUID {
+	if upsert {
+		input := fmt.Sprintf("%s|%s|%d|%s", l.Module, l.Level, l.Code, l.Msg)
+		hash := md5.Sum([]byte(input))
+		return uuid.UUID(hash)
+	}
+	return uuid.New()
 }
 
 func (l *LogMsg) String() string {
