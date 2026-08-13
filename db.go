@@ -10,11 +10,8 @@ import (
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
-	// Регистрируем и импортируем стандартный iofs драйвер
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/golang-migrate/migrate/v4/source/iofs"
-
-	// Драйвер pgx/v5 с алиасом для устранения конфликта имен
 	migrate_pgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,7 +33,7 @@ func (c *CustomFileInfo) Size() int64        { return c.size }
 func (c *CustomFileInfo) Mode() fs.FileMode  { return c.mode }
 func (c *CustomFileInfo) ModTime() time.Time { return time.Now() }
 func (c *CustomFileInfo) IsDir() bool        { return false }
-func (c *CustomFileInfo) Sys() any          { return nil }
+func (c *CustomFileInfo) Sys() any           { return nil }
 
 // MemoryFile реализует интерфейс fs.File для чтения SQL из памяти
 type MemoryFile struct {

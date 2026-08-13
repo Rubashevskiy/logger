@@ -17,7 +17,7 @@ type Config struct {
 	TableName string // Имя таблицы, например "app_logs"
 }
 
-// NewLogger принимает пул и структуру конфигурации
+// NewLogger принимает пул и структуру конфигурации для БД
 func NewLogger(pool *pgxpool.Pool, cfg Config) *Logger {
 	if pool == nil {
 		NewLogMsg("LOGGER", "FATAL", "pool is nil", -1, "NewLogger").Fatal()
@@ -45,7 +45,13 @@ func NewLogger(pool *pgxpool.Pool, cfg Config) *Logger {
 	}
 }
 
-// PushLog теперь принимает context из вызывающего кода
+/* PushLog - Вставка лога в БД
+   Алгоритм вставки:
+	event_id - Генерируется всегда (при вставке/обновления) служит для гарантированной пометки о чтении лога 
+	upsert (true) - Если в БД уже есть строка где поля (module, level, code, msg) уже есть, происходит обновление счетчика,
+		даты события, event_id, read_flg - новая строка не вставляется
+	upsert (false) - Вставка лога происходит в любом случае. 
+*/
 func (l *Logger) PushLog(ctx context.Context, data *LogMsg, upsert bool) *LogMsg {
 	var query string
 	if upsert {
