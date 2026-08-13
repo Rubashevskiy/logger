@@ -4,27 +4,30 @@
 
 ## Состав
 
-В модуле:
+В модуле:  
+```go
 type LogMsg struct {
-	Module string - Имя модуля или приложения
-	Level  string - Уровень лога(тип) ["INFO", "WARNING", "ERROR", "FATAL", "CRITICAL", итд]
-	Code   int64  - Код сообщения
-	Msg    string - Текст сообщения
-	Debug  string - Отладочное поле (детали сообщения)
-}
+	Module string - Имя модуля или приложения 
+	Level  string - Уровень лога(тип) ["INFO", "WARNING", "ERROR", "FATAL", "CRITICAL", итд] 
+	Code   int64  - Код сообщения 
+	Msg    string - Текст сообщения 
+	Debug  string - Отладочное поле (детали сообщения) 
+} 
+```
 
-В БД:
+```sql  
 	data_hash uuid NOT NULL, -- Хеш(При безусловной вставке - случайный),
-		-- при вставке с перезаписью хеш от module, level, code, msg 
-	occurence_count int8 DEFAULT 1 NOT NULL, - Количество повторений лога
-	"module" text NOT NULL, -- Имя модуля или приложения
-	"level" text NOT NULL,  --  Уровень лога(тип) ["INFO", "WARNING", "ERROR", "FATAL", "CRITICAL", итд]
-	code int8 NOT NULL,  -- Код сообщения
-	msg text NOT NULL, -- Текст сообщения
-	debug text NULL, -- Отладочное поле перезаписываемое при обновлении (детали сообщения)
-	upd_dttm timestamptz DEFAULT now() NOT NULL, -- Время вставки или обновления
-	read_flg bool DEFAULT false NOT NULL,  -- Флаг о прочтении сообщения
-	event_id uuid DEFAULT gen_random_uuid() NOT NULL, -- дополнительный UUD для гарантированного обновления флага о прочтении в 	-- ситуациях когда пользователь не прочитал еще сообщени, а лог уже обновиллся снова. 
+		-- при вставке с перезаписью хеш от module, level, code, msg  
+	occurence_count int8 DEFAULT 1 NOT NULL, - Количество повторений лога 
+	"module" text NOT NULL, -- Имя модуля или приложения 
+	"level" text NOT NULL,  --  Уровень лога(тип) ["INFO", "WARNING", "ERROR", "FATAL", "CRITICAL", итд] 
+	code int8 NOT NULL,  -- Код сообщения 
+	msg text NOT NULL, -- Текст сообщения 
+	debug text NULL, -- Отладочное поле перезаписываемое при обновлении (детали сообщения) 
+	upd_dttm timestamptz DEFAULT now() NOT NULL, -- Время вставки или обновления 
+	read_flg bool DEFAULT false NOT NULL,  -- Флаг о прочтении сообщения 
+	event_id uuid DEFAULT gen_random_uuid() NOT NULL, -- дополнительный UUD для гарантированного обновления флага о прочтении в 	-- ситуациях когда пользователь не прочитал еще сообщение, а лог уже обновился снова.  
+```
 
 ## Логика вставки:
 	event_id - Генерируется всегда (при вставке/обновления) служит для гарантированной пометки о чтении лога 
