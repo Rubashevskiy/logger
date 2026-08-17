@@ -38,28 +38,27 @@ type LogMsg struct {
  
 ## 📌 Требования к БД (Важно)
 
-Перед инициализацией логгера администратор базы данных должен **вручную создать схему** и выдать права используемой учетной записи. 
+Перед инициализацией логгера администратор базы данных должен **вручную создать схему и таблицу** и выдать права используемой учетной записи. 
 
-Пример SQL-команд:
+SQL-команды:
 ```sql
---  Разрешаем пользователю заходить в схему public
-GRANT USAGE ON SCHEMA public TO app_user;
+CREATE TABLE IF NOT EXISTS {{TABLE_NAME}} (
+	data_hash uuid NOT NULL,
+	occurence_count int8 DEFAULT 1 NOT NULL,
+	"module" text NOT NULL,
+	"level" text NOT NULL,
+	code int8 NOT NULL,
+	msg text NOT NULL,
+	debug text NULL,
+	upd_dttm timestamptz DEFAULT now() NOT NULL,
+	read_flg bool DEFAULT false NOT NULL,
+	event_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	CONSTRAINT {{TABLE_SUFFIX}}_pkey PRIMARY KEY (data_hash)
+);
 
---  Разрешаем создавать в ней новые объекты (чтобы создалась таблица schema_migrations)
-GRANT CREATE ON SCHEMA public TO app_user;
---  Разрешаем пользователю заходить в схему public
-GRANT USAGE ON SCHEMA test_log TO app_user;
+CREATE INDEX IF NOT EXISTS idx_level_time_{{TABLE_SUFFIX}} ON {{TABLE_NAME}} USING btree (level, upd_dttm DESC);
+CREATE INDEX IF NOT EXISTS idx_upd_dttm_{{TABLE_SUFFIX}} ON {{TABLE_NAME}} USING btree (upd_dttm DESC);
 
--- Даем право создавать в ней таблицы (включая динамические)
-GRANT CREATE ON SCHEMA test_log TO app_user;
-
--- На случай, если таблица app_logs или связанные с ней индексы/последовательности уже существуют:
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA test_log TO app_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA test_log TO app_user;
-
--- Права на все таблицы, которые будут созданы в test_log в будущем этим или другими миграциями
-ALTER DEFAULT PRIVILEGES IN SCHEMA test_log GRANT ALL PRIVILEGES ON TABLES TO app_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA test_log GRANT ALL PRIVILEGES ON SEQUENCES TO app_user;
 ```
 
 ## 🚀 Установка
@@ -69,8 +68,6 @@ go get github.com/Rubashevskiy/logger
 ```
 
 ## 💻 Пример использования
-
-Пакет автоматически создаст таблицу и необходимые индексы внутри указанной схемы при первом запуске (используется встроенный `golang-migrate`).
 
 ```go
 package main

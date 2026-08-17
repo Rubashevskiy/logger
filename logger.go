@@ -31,17 +31,9 @@ func NewLogger(pool *pgxpool.Pool, cfg Config) *Logger {
 		cfg.TableName = "app_logs"
 	}
 
-	// Собираем полное имя для SQL запросов
-	fullName := fmt.Sprintf("%s.%s", cfg.Schema, cfg.TableName)
-
-	// Запускаем миграции и передаем туда полное имя
-	if err := RunMigrations(pool, fullName); err != nil {
-		NewLogMsg("LOGGER", "FATAL", err.Error(), -1, "NewLogger").Fatal()
-	}
-
 	return &Logger{
 		pool:     pool,
-		fullName: fullName,
+		fullName: fmt.Sprintf("%s.%s", cfg.Schema, cfg.TableName),
 	}
 }
 
